@@ -18,6 +18,8 @@ import pe.edu.isil.inventario.dto.ReservaStockRequest;
 import pe.edu.isil.inventario.dto.ReservaStockResponse;
 import pe.edu.isil.inventario.dto.StockResponse;
 import pe.edu.isil.inventario.service.InventarioService;
+import pe.edu.isil.inventario.dto.DevolucionStockRequest;
+import pe.edu.isil.inventario.dto.DevolucionStockResponse;
 
 /**
  * API REST responsable del catálogo y del stock.
@@ -84,6 +86,27 @@ public class ProductoResource {
     );
     return Response.ok(toReservaResponse(producto, request.getCantidad())).build();
   }
+
+@POST
+@Path("/codigo/{codigo}/devoluciones")
+public Response devolverPorCodigo(
+    @PathParam("codigo") String codigo,
+    @NotNull @Valid DevolucionStockRequest request
+) {
+  ProductoInventario producto =
+      inventarioService.devolverStockPorCodigo(
+          codigo,
+          request.getCantidad()
+      );
+
+  DevolucionStockResponse response = new DevolucionStockResponse(
+      producto.getCodigo(),
+      request.getCantidad(),
+      producto.getStock()
+  );
+
+  return Response.ok(response).build();
+}
 
   private static ProductoResponse toResponse(ProductoInventario producto) {
     return new ProductoResponse(

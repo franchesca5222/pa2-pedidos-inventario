@@ -1,73 +1,76 @@
-# Inventario Service — Jakarta EE 11 + SQL Server Express 2025
+# Inventario Service PA2
 
-Proyecto académico complementario de `sistema-pedidos-jsp` para la Sesión 4: **Integración de aplicativos web con componentes empresariales**.
+Autora: Franchesca Burga Paredes.
 
-## Stack
+Proyecto basado en el material del docente:
+https://github.com/carnol1989/isil-2026-ii
+Rama de referencia: feature/sistema-pedidos-spring.
 
-- Java 21
-- Maven
-- Jakarta EE 11
-- WildFly 41
-- Jakarta REST
-- Jakarta Enterprise Beans (EJB)
-- Jakarta Persistence 3.2
-- Jakarta Transactions (JTA)
-- Bean Validation
-- Microsoft JDBC Driver for SQL Server 13.6
-- SQL Server Express 2025
+## Objetivo
 
-## Arquitectura
+Exponer una API REST para devolver stock de productos. Esta operación es
+utilizada por el sistema de pedidos cuando se anula un pedido.
 
-```text
-Sistema de Pedidos / Postman
-          |
-          | HTTP + JSON
-          v
-ProductoResource (Jakarta REST)
-          |
-          | @EJB
-          v
-InventarioService (@Stateless)
-          |
-          | @PersistenceContext
-          v
-EntityManager / InventarioPU
-          |
-          | java:app/jdbc/InventarioDS
-          v
-SQL Server Express 2025
+## Requisitos
+
+- Java 21.
+- Maven.
+- SQL Server con TCP/IP habilitado y puerto 1433.
+- Autenticación SQL Server habilitada.
+- Puerto HTTP 8082 disponible.
+
+El proyecto utiliza Jakarta EE 11 y WildFly 41. El plugin Maven provisiona
+WildFly y el soporte de Microsoft SQL Server.
+
+## Preparación de la base
+
+Para una instalación nueva, ejecutar en SSMS:
+
+database/01_crear_inventario.sql
+
+El script crea InventarioDB, el usuario académico y los productos iniciales.
+Revisar las credenciales del script antes de ejecutarlo.
+
+La conexión del servidor se configura localmente en:
+
+config/database.properties
+
+Configurar la URL JDBC, el usuario y la contraseña de la instalación.
+No publicar contraseñas reales en Git ni incluirlas en las evidencias.
+
+La unidad InventarioPU utiliza el datasource:
+
+java:jboss/datasources/InventarioDS
+
+Pedidos no se conecta directamente a esta base.
+
+## Orden de arranque
+
+1. Iniciar SQL Server.
+2. Iniciar Inventario en WildFly.
+3. Iniciar sistema-pedidos-springboot.
+
+Desde la carpeta inventario-service:
+
+```powershell
+mvn test
+mvn wildfly:run
 ```
 
-## Preparación rápida
+WildFly utiliza HTTP 8082 y administración 9992.
 
-1. Habilitar TCP/IP en SQL Server Express y configurar un puerto fijo (la guía usa 1433).
-2. Habilitar autenticación SQL Server/Mixed Mode para el usuario académico.
-3. Ejecutar `database/01_crear_inventario.sql` en SSMS.
-4. Verificar JDK 21 y Maven.
-5. Ejecutar:
+Detener WildFly antes de ejecutar mvn clean, porque el servidor utiliza
+archivos dentro de target.
 
-```bash
-mvn clean test
-mvn clean wildfly:run
-```
+## API de devolución
 
-El plugin usa `-Djboss.socket.binding.port-offset=2`, por lo que WildFly escucha en HTTP **8082** y Management **9992**. Esto permite ejecutar a la vez el `sistema-pedidos` existente (HTTP 8081, Management 9990).
+Método: POST
 
-Abrir:
+URL:
 
-```text
-http://localhost:8082/inventario-service/
-```
+http://localhost:8082/inventario-service/api/inventario/productos/codigo/{codigo}/devoluciones
 
-API principal:
-
-```text
-GET  /inventario-service/api/inventario/productos
-GET  /inventario-service/api/inventario/productos/1/stock
-POST /inventario-service/api/inventario/productos/1/reservas
-```
-
-Body de reserva:
+Solicitud:
 
 ```json
 {
@@ -75,16 +78,86 @@ Body de reserva:
 }
 ```
 
-También existen endpoints por `codigo` (`LAP-001`, `MON-001`, `TEC-001`) para mostrar un contrato menos acoplado a las claves internas de base de datos.
+Ejemplo de respuesta HTTP 200:
 
-## Material de clase
+```json
+{
+  "codigo": "LAP-001",
+  "cantidadDevuelta": 2,
+  "stockRestante": 10
+}
+```
 
-- `docs/GUIA_IMPLEMENTACION_PASO_A_PASO.md`
-- `docs/INTEGRACION_CON_SISTEMA_PEDIDOS.md`
-- `requests/inventario-service.http`
-- `openapi/inventario-service.yaml`
-- `database/02_reset_stock_demo.sql`
+Ejemplo ejecutable en PowerShell:
 
-## Nota académica de seguridad
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8082/inventario-service/api/inventario/productos/codigo/LAP-001/devoluciones" `
+  -ContentType "application/json" `
+  -Body '{"cantidad":2}'
+```
 
-`@DataSourceDefinition` contiene usuario/contraseña para reducir pasos durante el laboratorio. En producción las credenciales no deben almacenarse en código; deben externalizarse en un DataSource administrado por WildFly, Credential Store o un mecanismo de secretos. `trustServerCertificate=true` también se usa solo para el laboratorio local.
+Cada ejecución válida incrementa el stock. Consultar el valor actual antes
+de repetir una devolución.
+
+## Consulta de stock
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8082/inventario-service/api/inventario/productos/codigo/LAP-001/stock"
+```
+
+## Validaciones
+
+- Cantidad cero o negativa: HTTP 400.
+- Cantidad ausente: solicitud inválida.
+- Código inexistente: HTTP 404.
+- Conflicto de actualización concurrente: error controlado.
+
+## Modificaciones por capa
+
+- DTO: DevolucionStockRequest y DevolucionStockResponse.
+- ProductoResource: endpoint de devoluciones por código.
+- InventarioService: operación transaccional devolverStockPorCodigo.
+- ProductoInventario: operación de dominio devolverStock.
+
+La operación incrementa el stock dentro de una transacción local.
+Se conserva @Version para el control de concurrencia optimista.
+
+## Pruebas unitarias nuevas
+
+Clase:
+
+src/test/java/pe/edu/isil/inventario/domain/ProductoInventarioDevolucionTest.java
+
+Pruebas:
+
+- devolucionValidaIncrementaStock.
+- devolucionInvalidaNoModificaStock.
+
+Ejecutar:
+
+```powershell
+mvn test
+```
+
+Resultado obtenido: 4 pruebas totales, incluidas 2 nuevas de PA2,
+sin fallos ni errores.
+
+Estas pruebas no necesitan WildFly ni SQL Server.
+
+## Pruebas funcionales
+
+1. Consultar el stock antes de devolver.
+2. Devolver una cantidad positiva y comprobar el incremento.
+3. Enviar cantidad 0 y -2: comprobar HTTP 400.
+4. Consultar que las solicitudes inválidas no cambiaron el stock.
+5. Enviar un código inexistente: comprobar HTTP 404.
+
+## Limitaciones
+
+La API de devolución no implementa idempotencia ni reintentos automáticos.
+Una devolución repetida puede incrementar nuevamente el stock.
+
+La transacción de Inventario no incluye la base H2 de Pedidos.
+No se implementó el reto opcional de compensación.

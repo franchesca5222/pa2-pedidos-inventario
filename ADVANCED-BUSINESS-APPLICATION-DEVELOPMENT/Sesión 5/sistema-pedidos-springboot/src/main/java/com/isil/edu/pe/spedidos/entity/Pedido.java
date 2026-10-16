@@ -2,6 +2,8 @@ package com.isil.edu.pe.spedidos.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -41,11 +43,21 @@ public class Pedido {
   @Column(nullable = false)
   private LocalDateTime fecha;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private PedidoEstado estado = PedidoEstado.REGISTRADO;
+
   public Pedido() {
   }
 
-  public Pedido(String cliente, String productoCodigo, String productoNombre, BigDecimal precioUnitario,
-      int cantidad, BigDecimal total) {
+  public Pedido(
+      String cliente,
+      String productoCodigo,
+      String productoNombre,
+      BigDecimal precioUnitario,
+      int cantidad,
+      BigDecimal total
+  ) {
     this.cliente = cliente;
     this.productoCodigo = productoCodigo;
     this.productoNombre = productoNombre;
@@ -55,8 +67,16 @@ public class Pedido {
     this.fecha = LocalDateTime.now();
   }
 
-  public Pedido(Long id, String cliente, String productoCodigo, String productoNombre, BigDecimal precioUnitario,
-      int cantidad, BigDecimal total, LocalDateTime fecha) {
+  public Pedido(
+      Long id,
+      String cliente,
+      String productoCodigo,
+      String productoNombre,
+      BigDecimal precioUnitario,
+      int cantidad,
+      BigDecimal total,
+      LocalDateTime fecha
+  ) {
     this.id = id;
     this.cliente = cliente;
     this.productoCodigo = productoCodigo;
@@ -129,5 +149,19 @@ public class Pedido {
 
   public void setFecha(LocalDateTime fecha) {
     this.fecha = fecha;
+  }
+
+  public PedidoEstado getEstado() {
+    return estado;
+  }
+
+  public void anular() {
+    if (estado != PedidoEstado.REGISTRADO) {
+      throw new IllegalStateException(
+          "Solo se pueden anular pedidos registrados."
+      );
+    }
+
+    estado = PedidoEstado.ANULADO;
   }
 }

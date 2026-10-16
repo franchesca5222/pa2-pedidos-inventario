@@ -75,6 +75,14 @@ public class ProductoInventario {
     stock -= cantidad;
   }
 
+  public void devolverStock(int cantidad) {
+  if (cantidad <= 0) {
+    throw new IllegalArgumentException("La cantidad debe ser mayor que cero.");
+  }
+
+  stock += cantidad;
+}
+
   public Long getId() {
     return id;
   }
